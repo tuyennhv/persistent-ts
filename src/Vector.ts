@@ -123,7 +123,7 @@ class Vector<T> implements Iterable<T> {
     if (isFullBranch(this.length)) {
       base = emptyBranch();
       base.nodes[0] = this._root;
-      levelShift += 5;
+      levelShift += BIT_WIDTH;
     } else {
       base = copyVNode(this._root);
     }

@@ -2,10 +2,12 @@
 const BIT_WIDTH = 5;
 const BIT_MASK = 0b11111;
 const BRANCH_SIZE = 1 << BIT_WIDTH;
+const DEFAULT_LEVEL_SHIFT = 5;
 
 function isFullBranch(length: number): boolean {
   return (
-    length === 1 << 5 ||
+    // initially we initialize Vector with an empty branch (DEFAULT_LEVEL_SHIFT)
+    // length === 1 << 5 ||
     length === 1 << 10 ||
     length === 1 << 15 ||
     length === 1 << 20 ||
@@ -41,10 +43,15 @@ function copyVNode<T>(vnode: VNode<T>): VNode<T> {
   }
 }
 
+function copyVBranch<T>(vnode: VBranch<T>): VBranch<T> {
+  return {leaf: false, nodes: [...vnode.nodes]};
+}
+
 class Vector<T> implements Iterable<T> {
   private constructor(
-    private readonly _root: VNode<T>,
+    private readonly _root: VBranch<T>,
     private readonly _levelShift: number,
+    private readonly _tail: T[],
     public readonly length: number
   ) {}
 
@@ -52,7 +59,7 @@ class Vector<T> implements Iterable<T> {
    * Create an empty vector of a certain type.
    */
   public static empty<T>(): Vector<T> {
-    return new Vector(emptyLeaf(), 0, 0);
+    return new Vector(emptyBranch(), DEFAULT_LEVEL_SHIFT, Array(BRANCH_SIZE).fill(null), 0);
   }
 
   /**
@@ -75,8 +82,11 @@ class Vector<T> implements Iterable<T> {
    */
   public get(index: number): T | null {
     if (index < 0 || index >= this.length) return null;
+    if (index >= this.getTailOffset()) {
+      return this._tail[index % BRANCH_SIZE];
+    }
     let shift = this._levelShift;
-    let cursor = this._root;
+    let cursor: VNode<T> = this._root;
     while (!cursor.leaf) {
       // This cast is fine because we checked the length prior
       cursor = cursor.nodes[(index >>> shift) & BIT_MASK] as VNode<T>;
@@ -95,9 +105,15 @@ class Vector<T> implements Iterable<T> {
    */
   public set(index: number, value: T): Vector<T> {
     if (index < 0 || index >= this.length) return this;
-    const base = copyVNode(this._root);
+    if (index >= this.getTailOffset()) {
+      const newTail = [...this._tail];
+      newTail[index & BIT_MASK] = value;
+      // root is not changed
+      return new Vector(this._root, this._levelShift, newTail, this.length);
+    }
+    const base = copyVBranch(this._root);
     let shift = this._levelShift;
-    let cursor = base;
+    let cursor: VNode<T> = base;
     while (!cursor.leaf) {
       const subIndex = (index >>> shift) & BIT_MASK;
       // This cast is fine because we checked the length prior
@@ -107,7 +123,8 @@ class Vector<T> implements Iterable<T> {
       shift -= BIT_WIDTH;
     }
     cursor.values[index & BIT_MASK] = value;
-    return new Vector(base, this._levelShift, this.length);
+    // tail is not changed
+    return new Vector(base, this._levelShift, this._tail, this.length);
   }
 
   /**
@@ -118,18 +135,27 @@ class Vector<T> implements Iterable<T> {
    * @param value the value to push to the end of the vector
    */
   public append(value: T): Vector<T> {
-    let base: VNode<T>;
+    if (this.length - this.getTailOffset() < BRANCH_SIZE) {
+      // has space in tail
+      const newTail = [...this._tail];
+      newTail[this.length % BRANCH_SIZE] = value;
+      // root is not changed
+      return new Vector(this._root, this._levelShift, newTail, this.length + 1);
+    }
+    let base: VBranch<T>;
     let levelShift = this._levelShift;
-    if (isFullBranch(this.length)) {
+    if (isFullBranch(this.length - BRANCH_SIZE)) {
       base = emptyBranch();
       base.nodes[0] = this._root;
       levelShift += BIT_WIDTH;
     } else {
-      base = copyVNode(this._root);
+      base = copyVBranch(this._root);
     }
-    const index = this.length;
+    // getTailOffset is actually the 1st item in tail
+    // we now move it to the tree
+    const index = this.getTailOffset();
     let shift = levelShift;
-    let cursor = base;
+    let cursor: VNode<T> = base;
     while (!cursor.leaf) {
       const subIndex = (index >>> shift) & BIT_MASK;
       shift -= BIT_WIDTH;
@@ -142,8 +168,9 @@ class Vector<T> implements Iterable<T> {
       cursor.nodes[subIndex] = next;
       cursor = next;
     }
-    cursor.values[index & BIT_MASK] = value;
-    return new Vector(base, levelShift, this.length + 1);
+    // it's safe to update cursor bc "next" is a new instance anyway
+    cursor.values = [...this._tail];
+    return new Vector(base, levelShift, [value, ...Array(BRANCH_SIZE - 1).fill(null)], this.length + 1);
   }
 
   /**
@@ -153,40 +180,48 @@ class Vector<T> implements Iterable<T> {
    */
   public pop(): Vector<T> {
     if (this.length === 0) return this;
-    if (this._root.leaf) {
-      return new Vector(this._root, this._levelShift, this.length - 1);
+    // we always have a non-empty tail
+    const tailLength = this.length - this.getTailOffset();
+    if (tailLength >= 2) {
+      // ignore the last item
+      const newTailLength = (this.length - 1) % BRANCH_SIZE;
+      const newTail = [...this._tail.slice(0, newTailLength), ...Array(BRANCH_SIZE - newTailLength).fill(null)];
+      return new Vector(this._root, this._levelShift, newTail, this.length - 1);
     }
-    const index = this.length - 1;
-    function popNode(shift: number, current: VNode<T>): VNode<T> | null {
-      const subIndex = (index >>> shift) & BIT_MASK;
-      if (current.leaf) {
-        // We don't actually need to copy and remove the leaf nodes.
-        // This will only let the leaf nodes be GCed every 32 pops, but avoids
-        // a needless copy everytime.
-        return subIndex === 0 ? null : current;
-      }
-      const next = current.nodes[subIndex] as VNode<T>;
-      const child = popNode(shift - BIT_WIDTH, next);
-      if (subIndex === 0 && !child) {
-        return null;
-      } else {
-        const copied = copyVNode(current) as VBranch<T>;
-        copied.nodes[subIndex] = child;
-        return copied;
-      }
+    // tail has exactly 1 item, promote the right most leaf node as tail
+    const lastItemIndexInTree = this.getTailOffset() - 1;
+    // Tree has no item
+    if (lastItemIndexInTree < 0) {
+      return Vector.empty<T>();
     }
-    // We know that this will never be null
-    let newRoot = popNode(this._levelShift, this._root) as VNode<T>;
-    let levelShift = this._levelShift;
-    if (!newRoot.leaf && !newRoot.nodes[1]) {
-      newRoot = newRoot.nodes[0] as VNode<T>;
-      levelShift -= BIT_WIDTH;
+    const base = copyVBranch(this._root);
+    let shift = this._levelShift;
+    let cursor: VNode<T> = base;
+    // we always have a parent bc we create an empty branch initially
+    let parent: VNode<T> | null = null;
+    let subIndex: number | null = null;
+    while (!cursor.leaf) {
+      subIndex = (lastItemIndexInTree >>> shift) & BIT_MASK;
+      // This cast is fine because we checked the length prior
+      const next = copyVNode(cursor.nodes[subIndex] as VNode<T>);
+      cursor.nodes[subIndex] = next;
+      parent = cursor;
+      cursor = next;
+      shift -= BIT_WIDTH;
     }
-    return new Vector(newRoot, levelShift, this.length - 1);
+    const newTail = [...cursor.values];
+    parent!.nodes[subIndex!] = emptyLeaf<T>();
+    let newLevelShift = this._levelShift;
+    let newRoot: VBranch<T> = base;
+    if (isFullBranch(this.length - 1 - BRANCH_SIZE)) {
+      newRoot = base.nodes[0] as VBranch<T>;
+      newLevelShift -= BIT_WIDTH;
+    }
+    return new Vector(copyVBranch(newRoot), newLevelShift, newTail, this.length - 1);
   }
 
   public *[Symbol.iterator](): Generator<T> {
-    let toYield = this.length;
+    let toYield = this.getTailOffset() - 1;
     function* iterNode(node: VNode<T>): Generator<T> {
       if (node.leaf) {
         for (const v of node.values) {
@@ -203,6 +238,13 @@ class Vector<T> implements Iterable<T> {
       }
     }
     yield* iterNode(this._root);
+    const tailLength = this.length % BRANCH_SIZE;
+    for (let i = 0; i < tailLength; i++) yield this._tail[i];
+  }
+
+  private getTailOffset(): number {
+    return this.length < BRANCH_SIZE ? 0 : ((this.length - 1) >>> BIT_WIDTH) << BIT_WIDTH;
   }
 }
+
 export default Vector;

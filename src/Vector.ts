@@ -181,7 +181,7 @@ class Vector<T> implements Iterable<T> {
   public pop(): Vector<T> {
     if (this.length === 0) return this;
     // we always have a non-empty tail
-    const tailLength = this.length - this.getTailOffset();
+    const tailLength = this.getTailLength();
     if (tailLength >= 2) {
       // ignore the last item
       const newTailLength = (this.length - 1) % BRANCH_SIZE;
@@ -221,7 +221,7 @@ class Vector<T> implements Iterable<T> {
   }
 
   public *[Symbol.iterator](): Generator<T> {
-    let toYield = this.getTailOffset() - 1;
+    let toYield = this.getTailOffset();
     function* iterNode(node: VNode<T>): Generator<T> {
       if (node.leaf) {
         for (const v of node.values) {
@@ -238,8 +238,12 @@ class Vector<T> implements Iterable<T> {
       }
     }
     yield* iterNode(this._root);
-    const tailLength = this.length % BRANCH_SIZE;
+    const tailLength = this.getTailLength();
     for (let i = 0; i < tailLength; i++) yield this._tail[i];
+  }
+
+  private getTailLength(): number {
+    return this.length - this.getTailOffset();
   }
 
   private getTailOffset(): number {

@@ -23,6 +23,59 @@ it("Vector.append works with many elements", () => {
   for (let i = 0; i < times; ++i) {
     expect(acc.get(i)).to.be.equal(i);
   }
+  let i = 0;
+  for (let item of acc) {
+    expect(item).to.be.equal(i);
+    i++;
+  }
+  expect(i).to.be.equal(times);
+});
+
+it("Vector iterator should work fine", () => {
+  let acc = Vector.empty<number>();
+  const times = 1025;
+  for (let i = 0; i < times; ++i) {
+    acc = acc.append(2 * i);
+  }
+  expect(acc.length).to.be.equal(times);
+  let i = 0;
+  for (let item of acc) {
+    expect(item).to.be.equal(2 * i);
+    i++;
+  }
+  expect(i).to.be.equal(times);
+});
+
+it("Vector readOnlyForEach should work fine", () => {
+  let acc = Vector.empty<number>();
+  const times = 1025;
+  for (let i = 0; i < times; ++i) {
+    acc = acc.append(2 * i);
+  }
+  expect(acc.length).to.be.equal(times);
+  let count = 0;
+  acc.readOnlyForEach((v, i) => {
+    expect(v).to.be.equal(2 * i);
+    count++;
+  });
+  expect(count).to.be.equal(times);
+});
+
+it("Vector readOnlyMap should work fine", () => {
+  const times = 1025;
+  const originalArr = Array.from({length: times}, (_, i) => i);
+  const newArr = originalArr.map((v) => v * 2);
+  let acc = Vector.of(...originalArr);
+  expect(acc.length).to.be.equal(times);
+  const newArr2 = acc.readOnlyMap<number>((v) => v * 2);
+  expect(newArr2).to.be.deep.equal(newArr);
+});
+
+it("Vector toTS should convert to regular javascript array", () => {
+  const times = 1025;
+  const originalArr = Array.from({length: times}, (_, i) => i);
+  let acc = Vector.of(...originalArr);
+  expect(acc.toTS()).to.be.deep.equal(originalArr);
 });
 
 it("Vector.get works", () => {

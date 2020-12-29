@@ -220,6 +220,9 @@ class Vector<T> implements Iterable<T> {
     return new Vector(copyVBranch(newRoot), newLevelShift, newTail, this.length - 1);
   }
 
+  /**
+   * Implement Iterable interface.
+   */
   public *[Symbol.iterator](): Generator<T> {
     let toYield = this.getTailOffset();
     function* iterNode(node: VNode<T>): Generator<T> {
@@ -240,6 +243,80 @@ class Vector<T> implements Iterable<T> {
     yield* iterNode(this._root);
     const tailLength = this.getTailLength();
     for (let i = 0; i < tailLength; i++) yield this._tail[i];
+  }
+
+  /**
+   * Faster way to loop than the regular loop above.
+   * Same to iterator function but this doesn't yield to improve performance.
+   */
+  public readOnlyForEach(func: (t: T, i: number) => void): void {
+    let index = 0;
+    const tailOffset = this.getTailOffset();
+    const iterNode = (node: VNode<T>): void => {
+      if (node.leaf) {
+        for (const v of node.values) {
+          if (index < tailOffset) {
+            func(v, index);
+            index ++;
+          } else {
+            break;
+          }
+        }
+      } else {
+        for (const next of node.nodes) {
+          if (index >= tailOffset) break;
+          iterNode(next as VNode<T>);
+        }
+      }
+    }
+    iterNode(this._root);
+    const tailLength = this.getTailLength();
+    for (let i = 0; i < tailLength; i++) {
+      const value = this._tail[i];
+      func(value, index);
+      index++;
+    }
+  }
+
+  /**
+   * Map to an array of T2.
+   */
+  public readOnlyMap<T2>(func: (t: T, i: number) => T2): T2[] {
+    const result: T2[] = [];
+    let index = 0;
+    const tailOffset = this.getTailOffset();
+    const iterNode = (node: VNode<T>): void => {
+      if (node.leaf) {
+        for (const v of node.values) {
+          if (index < tailOffset) {
+            result.push(func(v, index));
+            index ++;
+          } else {
+            break;
+          }
+        }
+      } else {
+        for (const next of node.nodes) {
+          if (index >= tailOffset) break;
+          iterNode(next as VNode<T>);
+        }
+      }
+    }
+    iterNode(this._root);
+    const tailLength = this.getTailLength();
+    for (let i = 0; i < tailLength; i++) {
+      const value = this._tail[i];
+      result.push(func(value, index));
+      index++;
+    }
+    return result;
+  }
+
+  /**
+   * Convert to regular typescript array
+   */
+  public toTS(): Array<T> {
+    return this.readOnlyMap<T>((v) => v);
   }
 
   private getTailLength(): number {

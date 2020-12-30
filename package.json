@@ -4,9 +4,17 @@
   "description": "Persistent data structures for TypeScript.",
   "main": "index.ts",
   "scripts": {
+    "build": "yarn build-lib && yarn build-types",
+    "build-lib": "babel src -x .ts -d lib --source-maps",
+    "build-types": "tsc --incremental --declaration --outDir lib --emitDeclarationOnly",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf lib && rm -rf dist && rm -f tsconfig.tsbuildinfo",
     "lint": "eslint --color --ext .ts src/ test/",
     "lint:fix": "yarn run lint --fix",
-    "test:unit": "mocha --colors -r ts-node/register 'test/unit/**/*.test.ts'",
+    "prepublishOnly": "yarn build",
+    "pretest": "yarn check-types",
+    "test": "yarn test:unit",
+    "test:unit": "nyc -e .ts mocha --colors -r ts-node/register \"test/unit/**/*.test.ts\"",
     "test:perf": "mocha --colors -r ts-node/register 'test/perf/**/*.test.ts'"
   },
   "repository": {
@@ -25,6 +33,14 @@
   },
   "homepage": "https://github.com/cronokirby/persistent-ts#readme",
   "devDependencies": {
+    "@babel/cli": "^7.8.4",
+    "@babel/core": "^7.8.4",
+    "@babel/plugin-proposal-class-properties": "^7.8.3",
+    "@babel/plugin-proposal-object-rest-spread": "^7.8.3",
+    "@babel/plugin-syntax-bigint": "^7.8.3",
+    "@babel/preset-env": "^7.8.4",
+    "@babel/preset-typescript": "^7.8.3",
+    "@babel/register": "^7.8.3",
     "@typescript-eslint/eslint-plugin": "4.9.0",
     "@typescript-eslint/parser": "4.9.0",
     "ts-node": "^9.0.0",
@@ -39,7 +55,8 @@
     "@types/mocha": "^8.0.3",
     "chai": "^4.2.0",
     "@types/node": "^12.12.21",
-    "typescript": "^3.8.3"
+    "typescript": "^3.8.3",
+    "nyc": "^15.0.0"
   },
   "jest": {
     "transform": {

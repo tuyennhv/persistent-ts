@@ -8,11 +8,7 @@ function isFullBranch(length: number): boolean {
   return (
     // initially we initialize Vector with an empty branch (DEFAULT_LEVEL_SHIFT)
     // length === 1 << 5 ||
-    length === 1 << 10 ||
-    length === 1 << 15 ||
-    length === 1 << 20 ||
-    length === 1 << 25 ||
-    length === 1 << 30
+    length === 1 << 10 || length === 1 << 15 || length === 1 << 20 || length === 1 << 25 || length === 1 << 30
   );
 }
 
@@ -47,7 +43,7 @@ function copyVBranch<T>(vnode: VBranch<T>): VBranch<T> {
   return {leaf: false, nodes: [...vnode.nodes]};
 }
 
-class Vector<T> implements Iterable<T> {
+export class Vector<T> implements Iterable<T> {
   private constructor(
     private readonly _root: VBranch<T>,
     private readonly _levelShift: number,
@@ -117,7 +113,7 @@ class Vector<T> implements Iterable<T> {
     while (!cursor.leaf) {
       const subIndex = (index >>> shift) & BIT_MASK;
       // This cast is fine because we checked the length prior
-      const next = copyVNode(cursor.nodes[subIndex] as VNode<T>);
+      const next: VNode<T> = copyVNode(cursor.nodes[subIndex] as VNode<T>);
       cursor.nodes[subIndex] = next;
       cursor = next;
       shift -= BIT_WIDTH;
@@ -159,7 +155,7 @@ class Vector<T> implements Iterable<T> {
     while (!cursor.leaf) {
       const subIndex = (index >>> shift) & BIT_MASK;
       shift -= BIT_WIDTH;
-      let next = cursor.nodes[subIndex];
+      let next: VNode<T> | null = cursor.nodes[subIndex];
       if (!next) {
         next = shift === 0 ? emptyLeaf() : emptyBranch();
       } else {
@@ -203,7 +199,7 @@ class Vector<T> implements Iterable<T> {
     while (!cursor.leaf) {
       subIndex = (lastItemIndexInTree >>> shift) & BIT_MASK;
       // This cast is fine because we checked the length prior
-      const next = copyVNode(cursor.nodes[subIndex] as VNode<T>);
+      const next: VNode<T> = copyVNode(cursor.nodes[subIndex] as VNode<T>);
       cursor.nodes[subIndex] = next;
       parent = cursor;
       cursor = next;
@@ -257,7 +253,7 @@ class Vector<T> implements Iterable<T> {
         for (const v of node.values) {
           if (index < tailOffset) {
             func(v, index);
-            index ++;
+            index++;
           } else {
             break;
           }
@@ -268,7 +264,7 @@ class Vector<T> implements Iterable<T> {
           iterNode(next as VNode<T>);
         }
       }
-    }
+    };
     iterNode(this._root);
     const tailLength = this.getTailLength();
     for (let i = 0; i < tailLength; i++) {
@@ -290,7 +286,7 @@ class Vector<T> implements Iterable<T> {
         for (const v of node.values) {
           if (index < tailOffset) {
             result.push(func(v, index));
-            index ++;
+            index++;
           } else {
             break;
           }
@@ -301,7 +297,7 @@ class Vector<T> implements Iterable<T> {
           iterNode(next as VNode<T>);
         }
       }
-    }
+    };
     iterNode(this._root);
     const tailLength = this.getTailLength();
     for (let i = 0; i < tailLength; i++) {
@@ -327,5 +323,3 @@ class Vector<T> implements Iterable<T> {
     return this.length < BRANCH_SIZE ? 0 : ((this.length - 1) >>> BIT_WIDTH) << BIT_WIDTH;
   }
 }
-
-export default Vector;

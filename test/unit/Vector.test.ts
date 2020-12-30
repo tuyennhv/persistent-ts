@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import {expect} from "chai";
-import Vector from "../../src/Vector";
+import {Vector} from "../../src/Vector";
 
 it("Vector.empty has a length of 0", () => {
   const empty = Vector.empty<void>();
@@ -24,7 +24,7 @@ it("Vector.append works with many elements", () => {
     expect(acc.get(i)).to.be.equal(i);
   }
   let i = 0;
-  for (let item of acc) {
+  for (const item of acc) {
     expect(item).to.be.equal(i);
     i++;
   }
@@ -32,18 +32,18 @@ it("Vector.append works with many elements", () => {
 });
 
 it("Vector iterator should work fine", () => {
-  let acc = Vector.empty<number>();
   const times = 1025;
-  for (let i = 0; i < times; ++i) {
-    acc = acc.append(2 * i);
-  }
+  const originalArr = Array.from({length: times}, (_, i) => 2 * i);
+  const acc = Vector.of(...originalArr);
   expect(acc.length).to.be.equal(times);
   let i = 0;
-  for (let item of acc) {
+  for (const item of acc) {
     expect(item).to.be.equal(2 * i);
     i++;
   }
   expect(i).to.be.equal(times);
+  const newArr = [...acc];
+  expect(newArr).to.be.deep.equal(originalArr);
 });
 
 it("Vector readOnlyForEach should work fine", () => {
@@ -65,7 +65,7 @@ it("Vector readOnlyMap should work fine", () => {
   const times = 1025;
   const originalArr = Array.from({length: times}, (_, i) => i);
   const newArr = originalArr.map((v) => v * 2);
-  let acc = Vector.of(...originalArr);
+  const acc = Vector.of(...originalArr);
   expect(acc.length).to.be.equal(times);
   const newArr2 = acc.readOnlyMap<number>((v) => v * 2);
   expect(newArr2).to.be.deep.equal(newArr);
@@ -74,7 +74,7 @@ it("Vector readOnlyMap should work fine", () => {
 it("Vector toTS should convert to regular javascript array", () => {
   const times = 1025;
   const originalArr = Array.from({length: times}, (_, i) => i);
-  let acc = Vector.of(...originalArr);
+  const acc = Vector.of(...originalArr);
   expect(acc.toTS()).to.be.deep.equal(originalArr);
 });
 
@@ -94,6 +94,22 @@ it("Vector.set works", () => {
   const empty = Vector.empty<number>();
   const single = empty.append(a);
   expect(single.set(0, b).get(0)).to.be.equal(b);
+});
+
+it("Vector.set should not effect original vector", () => {
+  const times = 1025;
+  const originalArr = Array.from({length: times}, (_, i) => 2 * i);
+  const originalVector = Vector.of(...originalArr);
+  let newVector: Vector<number> = originalVector;
+  for (let i = 0; i < times; i++) {
+    newVector = newVector.set(i, i * 4);
+  }
+  for (let i = 0; i < times; i++) {
+    expect(newVector!.get(i)).to.be.equal(originalVector.get(i)! * 2);
+  }
+  expect([...newVector]).to.be.deep.equal(originalArr.map((item) => item * 2));
+  expect([...newVector].length).to.be.equal(1025);
+  expect(newVector.length).to.be.equal(1025);
 });
 
 it("Vector.pop works with many elements", () => {
